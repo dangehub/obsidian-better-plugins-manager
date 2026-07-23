@@ -2,8 +2,8 @@
  * plugin-notes/service.ts
  *
  * 服务主入口。main.ts 持有单一实例。
- * 在 two-way 模式下将 write hooks 传给 exporter 以实现自写抑制。
- * 仅此 service 为导出入口。
+ * exportAll 和 exportSingle 在写入前批量解析 repo 映射。
+ * repo resolver 是产品代码，出口这里只协调。
  */
 
 import type Manager from "main";
@@ -11,6 +11,7 @@ import { buildDirIndex, ExportDirIndex, exportPluginNote, WriteHooks } from "./e
 import { SyncService } from "./sync";
 import { isValidExportPath } from "./types";
 import { normalizePath } from "obsidian";
+import type { RepoResolver } from "src/repo-resolver";
 
 export type SyncMode = "export-only" | "two-way";
 
@@ -25,6 +26,11 @@ export class PluginNotesService {
 	constructor(manager: Manager) {
 		this.manager = manager;
 		this.syncService = new SyncService(manager);
+	}
+
+	/** 获取 repoResolver（main.ts 持有） */
+	private get resolver(): RepoResolver | undefined {
+		return this.manager.repoResolver;
 	}
 
 	start(dirPath: string, mode: SyncMode): boolean {
@@ -53,7 +59,6 @@ export class PluginNotesService {
 		return true;
 	}
 
-	/** Expose write hooks for sync service */
 	private getWriteHooks(): WriteHooks | undefined {
 		if (this.currentMode === "two-way") {
 			return this.syncService.writeHooks;
@@ -84,6 +89,16 @@ export class PluginNotesService {
 			}
 			const mp = this.manager.settings.Plugins.find((p) => p.id === pluginId);
 			if (!mp) return false;
+
+			// 解析当前插件的 repo（最多一次网络请求，失败不阻断导出）
+			if (this.resolver) {
+				try {
+					await this.resolver.resolveRepos([pluginId]);
+				} catch {
+					// resolver 失败不阻断
+				}
+			}
+
 			const result = await exportPluginNote(this.manager, this.index, mp, {
 				hooks: this.getWriteHooks(),
 			});
@@ -98,6 +113,16 @@ export class PluginNotesService {
 		if (!this.started || !this.currentDir) return;
 		this.index = await buildDirIndex(this.manager, this.currentDir);
 		const plugins = this.manager.settings.Plugins || [];
+
+		// 批量解析所有插件的 repo（最多一次网络请求、一次 settings 保存）
+		if (this.resolver && plugins.length > 0) {
+			try {
+				await this.resolver.resolveRepos(plugins.map((p) => p.id));
+			} catch {
+				// 失败不阻断导出
+			}
+		}
+
 		for (const mp of plugins) {
 			try {
 				await exportPluginNote(this.manager, this.index, mp, {

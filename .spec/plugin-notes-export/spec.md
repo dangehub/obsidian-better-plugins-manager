@@ -95,7 +95,12 @@ related:
 - 全量导出只扫描一次导出目录（`adapter.list()` 单次调用），构建 `id → file` 索引。
 - 只管理直接子级文件，不递归子目录。
 - 内容未变化不写入：比较新旧内容全等，相同则跳过。
-- 不调用网络 API（repoResolver 等仅用于显式流程）。
+- 不调用网络 API（repoResolver 等仅用于 UI 和设置页的显式流程）。
+- **repo 数据链路**：导出的 `bpm_rwc_repo` 来源与 UI/更新检查共享 `RepoResolver`。
+  - `exportAll` 在写入前批量调用 `resolveRepos(所有插件 id)`，最多一次社区列表请求和一次 settings 保存。
+  - `exportSingle` 调用 `resolveRepos([pluginId])`。
+  - 网络失败或非商店插件不阻断导出，repo 输出空字符串。
+  - exporter 核心代码仍然是纯本地，不直接调用 `requestUrl`/`fetch`。
 
 ## 保留用户内容
 

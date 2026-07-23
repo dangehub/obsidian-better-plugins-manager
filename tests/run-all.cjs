@@ -443,6 +443,50 @@ testAsync('7e no overwrite', async () => {
   const c = await migrate1015(m); assert(!c); assertEq(s.PLUGIN_NOTES_EXPORT_DIR, 'Existing');
 });
 
+// 8: PluginNotesService + Exporter integration — repo in frontmatter
+testAsync('8a exportAll with repo', async () => {
+  resetVault();
+  let resolveCalls = 0;
+  const settings = { PLUGIN_NOTES_EXPORT_DIR: 'BPM-Export', PLUGIN_NOTES_SYNC_MODE: 'export-only', PLUGIN_NOTES_ALLOW_ENABLED_WRITE: false,
+    Plugins: [{ id: 'memo', name: 'Memo', enabled: true, desc: '', note: '', group: '', tags: [], delay: '' }],
+    BPM_INSTALLED: [], REPO_MAP: {}, TAGS: [], DEBUG: false };
+  const mgr = makeMgr({ settings, manifests: { memo: { version: '1.0', author: 'T' } } });
+  mgr.settings = settings;
+  mgr.repoResolver = {
+    resolveRepos: async (ids) => {
+      resolveCalls++;
+      for (const id of ids) { mgr.settings.REPO_MAP[id] = 'dangehub/obsidian-oh-my-memo'; }
+      return { 'memo': 'dangehub/obsidian-oh-my-memo' };
+    },
+  };
+  const svc = new PluginNotesService(mgr);
+  svc.start('BPM-Export', 'export-only');
+  await svc.exportAll();
+  assert(resolveCalls >= 1, '8a resolver called');
+  const written = getFile('BPM-Export/memo.md');
+  assert(!!written, '8b file written');
+  const decoded = decodeNote(written);
+  assertEq(decoded.frontmatter.bpm_rwc_repo, 'dangehub/obsidian-oh-my-memo', '8c repo in frontmatter');
+  svc.stop();
+});
+testAsync('8b exportAll with resolver throw', async () => {
+  resetVault();
+  const settings = { PLUGIN_NOTES_EXPORT_DIR: 'BPM-Export', PLUGIN_NOTES_SYNC_MODE: 'export-only', PLUGIN_NOTES_ALLOW_ENABLED_WRITE: false,
+    Plugins: [{ id: 'unknown-p', name: 'Unknown', enabled: true, desc: '', note: '', group: '', tags: [], delay: '' }],
+    BPM_INSTALLED: [], REPO_MAP: {}, TAGS: [], DEBUG: false };
+  const mgr = makeMgr({ settings, manifests: { 'unknown-p': { version: '1.0' } } });
+  mgr.settings = settings;
+  mgr.repoResolver = { resolveRepos: async () => { throw new Error('resolver fail'); } };
+  const svc = new PluginNotesService(mgr);
+  svc.start('BPM-Export', 'export-only');
+  await svc.exportAll();
+  const written = getFile('BPM-Export/unknown-p.md');
+  assert(!!written, '8d file written despite resolver fail');
+  const decoded = decodeNote(written);
+  assertEq(decoded.frontmatter.bpm_rwc_repo, '', '8e repo empty when unknown');
+  svc.stop();
+});
+
 // ===================== FINALIZE =====================
 async function finish() {
   for (const { name, fn } of testQueue) {
