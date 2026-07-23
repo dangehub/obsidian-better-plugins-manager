@@ -18,7 +18,6 @@ import { ObsidianAppWithInternals, ObsidianPluginRegistry, RibbonNativeItem, Win
 import { PluginNotesService } from './plugin-notes/service';
 import { RibbonModal } from './modal/ribbon-modal';
 import { githubProxyEnabled, resolveGithubUrl } from './github-url';
-
 type UpdateSource = 'official' | 'github' | 'unknown';
 interface UpdateStatus {
     source: UpdateSource;
@@ -156,6 +155,7 @@ export default class Manager extends Plugin {
         }
 
         this.agreement = new Agreement(this);
+        void this.startupCheckForUpdates();
 
         // 启动插件笔记导出服务
         this.pluginNotesService = new PluginNotesService(this);
@@ -163,8 +163,6 @@ export default class Manager extends Plugin {
             this.settings.PLUGIN_NOTES_EXPORT_DIR,
             this.settings.PLUGIN_NOTES_SYNC_MODE || "export-only"
         );
-
-        void this.startupCheckForUpdates();
         void this.startupMaintainBetaSources();
 
         this.registerObsidianProtocolHandler("BPM-plugin-install", (params: ObsidianProtocolData) => {
@@ -191,7 +189,6 @@ export default class Manager extends Plugin {
 
         // 停止插件笔记导出服务
         this.pluginNotesService?.stop();
-
         // 临走前再清理一次
         if (this.isRibbonManagerEnabled()) this.cleanRibbonItems();
 
@@ -512,7 +509,7 @@ export default class Manager extends Plugin {
                 await this.pluginNotesService.exportSingle(pluginId);
             } catch (e) {
                 if (this.settings.DEBUG) {
-                    console.error(`[BPM] savePluginAndExport: export failed for "${pluginId}"`, e);
+                    console.error('[BPM] savePluginAndExport: export failed for "' + pluginId + '"', e);
                 }
             }
         }
