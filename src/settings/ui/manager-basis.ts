@@ -2,6 +2,7 @@ import BaseSetting from "../base-setting";
 import { ButtonComponent, DropdownComponent, Setting, ToggleComponent, TextComponent, Notice } from "obsidian";
 import Commands from "src/command";
 import { githubProxyEnabled } from "src/github-url";
+import { isValidExportPath } from "../../plugin-notes/types";
 // import { GROUP_STYLE, ITEM_STYLE, TAG_STYLE } from "src/data/data";
 
 export default class ManagerBasis extends BaseSetting {
@@ -220,8 +221,7 @@ export default class ManagerBasis extends BaseSetting {
         exportDirSaveBtn.setButtonText(this.manager.translator.t("通用_保存_文本"));
         exportDirSaveBtn.setCta();
         exportDirSaveBtn.onClick(async () => {
-            // Path validation (imported from plugin-notes)
-            const { isValidExportPath } = await import("../../plugin-notes/types.js");
+            // Path validation
             if (exportDirDraft && exportDirDraft.length > 0) {
                 const validation = isValidExportPath(exportDirDraft);
                 if (!validation.valid) {
@@ -250,12 +250,15 @@ export default class ManagerBasis extends BaseSetting {
         syncModeDropdown.onChange((value) => {
             this.settings.PLUGIN_NOTES_SYNC_MODE = value as "export-only" | "two-way";
             void this.manager.saveSettings();
-            // Only restart if export dir is valid
-            if (this.settings.PLUGIN_NOTES_EXPORT_DIR) {
+            // Only restart if export dir is valid (or empty = disabled)
+            const dir = this.settings.PLUGIN_NOTES_EXPORT_DIR || "";
+            if (!dir || isValidExportPath(dir).valid) {
                 this.manager.pluginNotesService?.restart(
-                    this.settings.PLUGIN_NOTES_EXPORT_DIR,
+                    dir,
                     this.settings.PLUGIN_NOTES_SYNC_MODE
                 );
+            } else {
+                new Notice(this.manager.translator.t("设置_基础设置_导出目录_验证失败") + " invalid export dir");
             }
         });
 

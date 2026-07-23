@@ -7,7 +7,7 @@
  */
 
 import type Manager from "main";
-import { buildDirIndex, ExportDirIndex, exportPluginNote, exportAllPluginNotes, WriteHooks } from "./exporter";
+import { buildDirIndex, ExportDirIndex, exportPluginNote, WriteHooks } from "./exporter";
 import { SyncService } from "./sync";
 import { isValidExportPath } from "./types";
 import { normalizePath } from "obsidian";

@@ -206,7 +206,7 @@ const migrate032 = async (manager: Manager): Promise<void> => {
  * EXPORT_DIR 仍保留用于兼容旧数据，但新功能仅读取 PLUGIN_NOTES_EXPORT_DIR。
  * 同时添加新的默认值字段（PLUGIN_NOTES_SYNC_MODE / PLUGIN_NOTES_ALLOW_ENABLED_WRITE）。
  */
-const migrate1015 = async (manager: Manager): Promise<boolean> => {
+export const migrate1015 = async (manager: Manager): Promise<boolean> => {
 	let changed = false;
 
 	// 迁移旧导出目录

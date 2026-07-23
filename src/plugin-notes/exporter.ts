@@ -22,11 +22,11 @@ export interface ExportDirIndex {
 	allFiles: string[];
 }
 
-/** Write lifecycle hooks */
+/** Write lifecycle hooks — beforeWrite returns token id for cleanup */
 export interface WriteHooks {
-	beforeWrite?: (path: string, content: string) => void;
-	writeSuccess?: (path: string) => void;
-	writeFailure?: (path: string) => void;
+	beforeWrite?: (path: string, content: string) => string | undefined;
+	writeSuccess?: (path: string, tokenId?: string) => void;
+	writeFailure?: (path: string, tokenId?: string) => void;
 }
 
 function isDirectChild(filePath: string, dirPath: string): boolean {
@@ -196,43 +196,24 @@ export async function exportPluginNote(
 	if (existingContent !== null && existingContent === newContent) return { written: false, skipped: true, reason: "unchanged" };
 
 	// Register write suppression BEFORE write (if hook provided)
+	let tokenId: string | undefined;
 	if (options?.hooks?.beforeWrite) {
-		options.hooks.beforeWrite(targetPath, newContent);
+		tokenId = options.hooks.beforeWrite(targetPath, newContent);
 	}
 
 	try {
 		await adapter.write(targetPath, newContent);
 		index.idToFile.set(mp.id, { path: normalizePath(targetPath), confirmed: true });
 		if (options?.hooks?.writeSuccess) {
-			options.hooks.writeSuccess(targetPath);
+			options.hooks.writeSuccess(targetPath, tokenId);
 		}
 		return { written: true, skipped: false };
 	} catch (e) {
 		// Clean up suppression token on failure
 		if (options?.hooks?.writeFailure) {
-			options.hooks.writeFailure(targetPath);
+			options.hooks.writeFailure(targetPath, tokenId);
 		}
 		if (manager.settings.DEBUG) console.error(`[BPM] Write failed for "${mp.id}"`, e);
 		return { written: false, skipped: true, reason: "write-failed" };
 	}
-}
-
-export async function exportAllPluginNotes(manager: Manager, dirPath: string): Promise<{ total: number; written: number; skipped: number; errors: number }> {
-	const stat = { total: 0, written: 0, skipped: 0, errors: 0 };
-	const validation = isValidExportPath(dirPath);
-	if (!validation.valid) return stat;
-	const index = await buildDirIndex(manager, dirPath);
-	const plugins = manager.settings.Plugins || [];
-	stat.total = plugins.length;
-	for (const mp of plugins) {
-		try {
-			const result = await exportPluginNote(manager, index, mp);
-			if (result.written) stat.written++;
-			else stat.skipped++;
-		} catch (e) {
-			stat.errors++;
-			if (manager.settings.DEBUG) console.error(`[BPM] Export failed for "${mp.id}"`, e);
-		}
-	}
-	return stat;
 }
