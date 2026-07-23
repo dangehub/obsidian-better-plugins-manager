@@ -127,6 +127,7 @@ related:
 - 新增 `PLUGIN_NOTES_EXPORT_DIR` 替代过时 `EXPORT_DIR`。
 - 迁移 `migrate1015`（版本 1.0.15）：复制旧 `EXPORT_DIR` → `PLUGIN_NOTES_EXPORT_DIR`。
 - 新增 `PLUGIN_NOTES_SYNC_MODE`（`"export-only"` 默认）。新增 `PLUGIN_NOTES_ALLOW_ENABLED_WRITE`（`false` 默认）。
+- **调度保证**：`runMigrations` 只运行 `lastMigationVersion < migration.version <= 当前插件版本` 的迁移。目标版本未发布的迁移项不会被执行。
 
 ## 测试
 

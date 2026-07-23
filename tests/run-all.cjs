@@ -91,7 +91,7 @@ const { decodeNote, safeFileName, isValidExportPath, hasStrictBooleanEnabled, ge
 const { buildDirIndex, exportPluginNote } = exporter;
 const { SyncService } = syncMod;
 const { PluginNotesService } = serviceMod;
-const { migrate1015 } = migrationsMod;
+const { migrate1015, runMigrations } = migrationsMod;
 
 // ---- Mock Vault ----
 const vaultFiles = new Map();
@@ -406,13 +406,38 @@ testAsync('6b invalid path', async () => { const svc = new PluginNotesService(ma
 testAsync('6c .obsidian', async () => { const svc = new PluginNotesService(makeMgr()); assert(!svc.start('.obsidian', 'export-only')); });
 
 // ----- Group 7: Migration -----
-testAsync('7a migrate', async () => {
+testAsync('7a runMigrations 1.0.14 + MV=1.0.14: no 1.0.15', async () => {
+  const s = { EXPORT_DIR: 'Legacy', PLUGIN_NOTES_EXPORT_DIR: '', PLUGIN_NOTES_SYNC_MODE: 'two-way', PLUGIN_NOTES_ALLOW_ENABLED_WRITE: true, MIGRATION_VERSION: '1.0.14', Plugins: [] };
+  const m = { settings: s, manifest: { version: '1.0.14' }, saveSettings: async () => { logCall('saveSettings', []); }, appPlugins: {}, app: { vault: { adapter: { list: async()=>({files:[],folders:[]}), read: async()=>'', exists: async()=>false, write: async()=>{} } } }, registerEvent: ()=>{} };
+  callLog = [];
+  await runMigrations(m);
+  assertEq(s.PLUGIN_NOTES_EXPORT_DIR, '', 'not migrated');
+  assertEq(s.MIGRATION_VERSION, '1.0.14', 'stays 1.0.14');
+});
+testAsync('7b runMigrations 1.0.15 + MV=1.0.14: runs 1.0.15', async () => {
+  const s = { EXPORT_DIR: 'Legacy', PLUGIN_NOTES_EXPORT_DIR: '', PLUGIN_NOTES_SYNC_MODE: '', PLUGIN_NOTES_ALLOW_ENABLED_WRITE: undefined, MIGRATION_VERSION: '1.0.14', Plugins: [] };
+  const m = { settings: s, manifest: { version: '1.0.15' }, saveSettings: async () => { logCall('saveSettings', []); }, appPlugins: {}, app: { vault: { adapter: { list: async()=>({files:[],folders:[]}), read: async()=>'', exists: async()=>false, write: async()=>{} } } }, registerEvent: ()=>{} };
+  callLog = [];
+  await runMigrations(m);
+  assertEq(s.PLUGIN_NOTES_EXPORT_DIR, 'Legacy', 'migrated');
+  assertEq(s.PLUGIN_NOTES_SYNC_MODE, 'export-only', 'mode set');
+  assertEq(s.PLUGIN_NOTES_ALLOW_ENABLED_WRITE, false, 'write set');
+  assertEq(s.MIGRATION_VERSION, '1.0.15', 'advanced to 1.0.15');
+});
+testAsync('7c runMigrations MV=99.0.0 > current: no change', async () => {
+  const s = { EXPORT_DIR: '', PLUGIN_NOTES_EXPORT_DIR: '', PLUGIN_NOTES_SYNC_MODE: '', PLUGIN_NOTES_ALLOW_ENABLED_WRITE: undefined, MIGRATION_VERSION: '99.0.0', Plugins: [] };
+  const m = { settings: s, manifest: { version: '1.0.14' }, saveSettings: async () => { logCall('saveSettings', []); }, appPlugins: {}, app: { vault: { adapter: { list: async()=>({files:[],folders:[]}), read: async()=>'', exists: async()=>false, write: async()=>{} } } }, registerEvent: ()=>{} };
+  callLog = [];
+  await runMigrations(m);
+  assertEq(s.MIGRATION_VERSION, '99.0.0', 'preserved');
+});
+testAsync('7d migrate1015 from 1.0.14', async () => {
   const s = { EXPORT_DIR: 'Old-Dir', PLUGIN_NOTES_EXPORT_DIR: '', PLUGIN_NOTES_SYNC_MODE: '', PLUGIN_NOTES_ALLOW_ENABLED_WRITE: undefined, MIGRATION_VERSION: '1.0.14', Plugins: [] };
   const m = { settings: s, manifest: { version: '1.0.15' }, saveSettings: async () => {} };
   const c = await migrate1015(m); assert(c); assertEq(s.PLUGIN_NOTES_EXPORT_DIR, 'Old-Dir');
   assertEq(s.PLUGIN_NOTES_SYNC_MODE, 'export-only'); assertEq(s.PLUGIN_NOTES_ALLOW_ENABLED_WRITE, false);
 });
-testAsync('7b no overwrite', async () => {
+testAsync('7e no overwrite', async () => {
   const s = { EXPORT_DIR: 'Old', PLUGIN_NOTES_EXPORT_DIR: 'Existing', PLUGIN_NOTES_SYNC_MODE: 'two-way', PLUGIN_NOTES_ALLOW_ENABLED_WRITE: true, MIGRATION_VERSION: '1.0.14', Plugins: [] };
   const m = { settings: s, manifest: { version: '1.0.15' }, saveSettings: async () => {} };
   const c = await migrate1015(m); assert(!c); assertEq(s.PLUGIN_NOTES_EXPORT_DIR, 'Existing');

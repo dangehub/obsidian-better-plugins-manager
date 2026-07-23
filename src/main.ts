@@ -1674,4 +1674,3 @@ export default class Manager extends Plugin {
         this.updateRibbonStyles();
     }
 }
-

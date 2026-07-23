@@ -256,7 +256,11 @@ export const runMigrations = async (manager: Manager): Promise<void> => {
 	const currentVersion = manager.manifest.version;
 	const lastMigrationVersion = manager.settings.MIGRATION_VERSION || "";
 	const pendingMigrations = migrations
-		.filter((migration) => compareVersions(migration.version, lastMigrationVersion) > 0)
+		.filter((migration) => {
+			// 只运行 last < version <= current，禁止提前执行未来版本迁移
+			return compareVersions(migration.version, lastMigrationVersion) > 0
+				&& compareVersions(migration.version, currentVersion) <= 0;
+		})
 		.sort((a, b) => compareVersions(a.version, b.version));
 
 	let anyChange = false;
@@ -280,10 +284,8 @@ export const runMigrations = async (manager: Manager): Promise<void> => {
 	}
 
 	/**
-	 * 迁移表不一定每个发布版本都有条目。
-	 *
-	 * 当插件升级到没有新迁移的版本时，仍把 MIGRATION_VERSION 推进到当前插件版本，
-	 * 表示“截至当前版本无需额外迁移”，避免未来每次启动都重新扫描旧迁移表。
+	 * 推进到当前插件版本，但不得超过 currentVersion。
+	 * 防止 MIGRATION_VERSION 因迁移表含未来版本而被意外提前。
 	 */
 	if (!manager.settings.MIGRATION_VERSION || compareVersions(manager.settings.MIGRATION_VERSION, currentVersion) < 0) {
 		manager.settings.MIGRATION_VERSION = currentVersion;
