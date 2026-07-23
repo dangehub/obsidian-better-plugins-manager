@@ -15,9 +15,10 @@ import { SystemRibbonManager } from './manager/system-ribbon-manager';
 import { RibbonItem } from './data/types';
 import { markSourceInstalledRelease, sourceHasUpdate as sourceHasConfiguredUpdate, syncSourceReleaseCheck } from './source-release';
 import { ObsidianAppWithInternals, ObsidianPluginRegistry, RibbonNativeItem, WindowWithMoment, WorkspaceWithRibbon } from './obsidian-internals';
-import { PluginNotesService } from './plugin-notes/service';
 import { RibbonModal } from './modal/ribbon-modal';
 import { githubProxyEnabled, resolveGithubUrl } from './github-url';
+
+import { PluginNotesService } from './plugin-notes/service';
 type UpdateSource = 'official' | 'github' | 'unknown';
 interface UpdateStatus {
     source: UpdateSource;
@@ -1673,3 +1674,4 @@ export default class Manager extends Plugin {
         this.updateRibbonStyles();
     }
 }
+

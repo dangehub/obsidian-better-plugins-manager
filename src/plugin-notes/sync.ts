@@ -1,114 +1,103 @@
 /**
  * plugin-notes/sync.ts
  *
- * 双向同步模块：
- * - per-path debounce（不丢文件）
- * - 串行队列 + generation guard（stop 后无副作用）
- * - path+content token 自写抑制（无竞态）
- * - 严格类型校验：只有原始 YAML 值为 boolean 才允许 enabled 写回
- * - BPM 自身始终跳过 enabled 写回
- * - 原子 enabled 写回：API 失败后回滚 mp.enabled
+ * 双向同步：
+ * - per-path debounce
+ * - serial queue + generation guard (stop 后不执行 pending)
+ * - path+content token 自写抑制（exporter hook 接线）
+ * - 严格类型：raw boolean 才 enabled 写回；string[] 全部 string 才 tags 写回
+ * - BPM 自身跳过；API 失败不污染 mp.enabled
  */
 
 import { normalizePath, TFile, EventRef } from "obsidian";
 import type Manager from "main";
-import { decodeNote, hasStrictBooleanEnabled, getStrictEnabledValue } from "./types";
-import { buildDirIndex, exportPluginNote } from "./exporter";
+import { decodeNote, hasStrictBooleanEnabled, getStrictEnabledValue, strictStringArray } from "./types";
+import { buildDirIndex, WriteHooks, ExportDirIndex, exportPluginNote } from "./exporter";
 
-/** per-path debounce */
-function createDebouncedMap(): {
-	get: (path: string) => void;
-	set: (path: string, fn: () => void, delay: number) => void;
-	delete: (path: string) => void;
-	clear: () => void;
-} {
-	const timers = new Map<string, ReturnType<typeof setTimeout>>();
-	return {
-		get: (_path: string) => { /* existence check not needed externally */ },
-		set: (path: string, fn: () => void, delay: number) => {
-			const existing = timers.get(path);
-			if (existing) clearTimeout(existing);
-			const timer = setTimeout(() => {
-				timers.delete(path);
-				fn();
-			}, delay);
-			timers.set(path, timer);
-		},
-		delete: (path: string) => {
-			const t = timers.get(path);
-			if (t) clearTimeout(t);
-			timers.delete(path);
-		},
-		clear: () => {
-			timers.forEach((t) => clearTimeout(t));
-			timers.clear();
-		},
-	};
+/** Per-path debounce map */
+class DebounceMap {
+	private timers = new Map<string, ReturnType<typeof setTimeout>>();
+
+	set(path: string, fn: () => void, delay: number): void {
+		this.delete(path);
+		const timer = setTimeout(() => {
+			this.timers.delete(path);
+			fn();
+		}, delay);
+		this.timers.set(path, timer);
+	}
+
+	delete(path: string): void {
+		const t = this.timers.get(path);
+		if (t) clearTimeout(t);
+		this.timers.delete(path);
+	}
+
+	clear(): void {
+		this.timers.forEach((t) => clearTimeout(t));
+		this.timers.clear();
+	}
 }
 
-/** 串行任务队列 */
+/** Serial queue with generation guard */
 class SerialQueue {
 	private pending: Array<() => Promise<void>> = [];
-	private running = false;
+	private active = false;
 	private generation = 0;
+	private activePromise: Promise<void> | null = null;
 
-	push(fn: () => Promise<void>): number {
+	get isActive(): boolean { return this.active; }
+
+	push(fn: () => Promise<void>): void {
 		const gen = this.generation;
 		this.pending.push(async () => {
-			if (gen !== this.generation) return; // stop 后跳过
+			if (gen !== this.generation) return;
 			await fn();
 		});
-		if (!this.running) {
-			void this.runNext();
-		}
-		return gen;
+		if (!this.active) void this.runNext();
 	}
 
 	private async runNext(): Promise<void> {
 		if (this.pending.length === 0) {
-			this.running = false;
+			this.active = false;
+			this.activePromise = null;
 			return;
 		}
-		this.running = true;
+		this.active = true;
 		const fn = this.pending.shift()!;
-		try {
-			await fn();
-		} catch (e) {
-			console.error("[BPM] Sync queue task failed", e);
-		}
-		setTimeout(() => void this.runNext(), 0);
+		const p = fn().finally(() => {
+			if (this.generation === 0) return; // stopped
+			setTimeout(() => { if (this.active) void this.runNext(); }, 0);
+		});
+		this.activePromise = p;
+		await p;
 	}
 
-	/** 停止所有任务，不再执行任何 pending 或 future 任务 */
 	stop(): void {
 		this.generation++;
 		this.pending = [];
-		this.running = false;
+		this.active = false;
+		this.activePromise = null;
 	}
 
 	async drain(): Promise<void> {
 		this.pending = [];
-		while (this.running) {
-			await new Promise((resolve) => setTimeout(resolve, 10));
+		while (this.active && this.activePromise) {
+			await Promise.race([this.activePromise, new Promise((r) => setTimeout(r, 100))]);
 		}
 	}
 }
 
-/**
- * 自写抑制：基于 path+content token。
- * adapter.write 前登记 path → content，modify 时如果内容完全匹配则消费跳过。
- */
+/** Path+content token registration */
 class WriteSuppression {
 	private tokens = new Map<string, string[]>();
 
-	/** 登记即将写入的 path 和内容 */
 	register(path: string, content: string): void {
 		const existing = this.tokens.get(path) || [];
 		existing.push(content);
 		this.tokens.set(path, existing);
 	}
 
-	/** 消费 token：检查 path 的内容是否匹配某个登记值，匹配则移除并返回 true */
 	consume(path: string, content: string): boolean {
 		const existing = this.tokens.get(path);
 		if (!existing) return false;
@@ -118,14 +107,15 @@ class WriteSuppression {
 			if (existing.length === 0) this.tokens.delete(path);
 			return true;
 		}
-		// 清理所有过时的 token
-		this.tokens.delete(path);
 		return false;
 	}
 
-	/** 清除某个 path 的全部 token（写入失败时调用） */
-	clear(path: string): void {
-		this.tokens.delete(path);
+	/** Remove only the FIRST matching (or any) token for path */
+	removeOne(path: string): void {
+		const existing = this.tokens.get(path);
+		if (!existing) return;
+		existing.shift();
+		if (existing.length === 0) this.tokens.delete(path);
 	}
 
 	clearAll(): void {
@@ -138,12 +128,28 @@ export class SyncService {
 	private watcherRef: EventRef | null = null;
 	private suppress = new WriteSuppression();
 	private queue = new SerialQueue();
-	private debouncer = createDebouncedMap();
+	private debouncer = new DebounceMap();
 	private isRunning = false;
 	private currentDir = "";
 
 	constructor(manager: Manager) {
 		this.manager = manager;
+	}
+
+	/** Expose write hooks for exporter */
+	get writeHooks(): WriteHooks {
+		return {
+			beforeWrite: (path: string, content: string) => {
+				this.suppress.register(path, content);
+			},
+			writeSuccess: (_path: string) => {
+				// Token consumed by modify event; if event never fires,
+				// TTL cleanup handles it
+			},
+			writeFailure: (path: string) => {
+				this.suppress.removeOne(path);
+			},
+		};
 	}
 
 	start(dirPath: string): void {
@@ -153,63 +159,46 @@ export class SyncService {
 		this.currentDir = normalizePath(dirPath);
 		this.isRunning = true;
 
-		this.watcherRef = this.manager.app.vault.on(
-			"modify",
-			(file) => {
+		this.watcherRef = this.manager.app.vault.on("modify", (file) => {
+			if (!this.isRunning) return;
+			if (!(file instanceof TFile)) return;
+			if (!file.path.endsWith(".md")) return;
+
+			const normalized = normalizePath(file.path);
+			if (!normalized.startsWith(this.currentDir + "/") && normalized !== this.currentDir) return;
+
+			this.debouncer.set(normalized, () => {
 				if (!this.isRunning) return;
-				if (!(file instanceof TFile)) return;
-				if (!file.path.endsWith(".md")) return;
+				this.queue.push(() => this.handleFileChange(normalized));
+			}, 500);
+		});
 
-				const normalized = normalizePath(file.path);
-				if (!normalized.startsWith(this.currentDir + "/") && normalized !== this.currentDir) return;
-
-				// per-path debounce
-				this.debouncer.set(normalized, () => {
-					if (!this.isRunning) return;
-					this.queue.push(() => this.handleFileChange(normalized));
-				}, 500);
-			}
-		);
-
-		if (this.watcherRef) {
-			this.manager.registerEvent(this.watcherRef);
-		}
+		if (this.watcherRef) this.manager.registerEvent(this.watcherRef);
 	}
 
 	stop(): void {
 		this.isRunning = false;
 		this.debouncer.clear();
-		this.queue.stop(); // 停止所有待执行任务
+		this.queue.stop();
 		this.suppress.clearAll();
-
 		if (this.watcherRef) {
 			this.manager.app.vault.offref(this.watcherRef);
 			this.watcherRef = null;
 		}
-
 		this.currentDir = "";
 	}
 
-	setSuppress(path: string, content: string): void {
-		this.suppress.register(path, content);
-	}
-
-	clearSuppress(): void {
-		this.suppress.clearAll();
-	}
-
 	private async handleFileChange(filePath: string): Promise<void> {
+		// Guard: stop was called before we execute
 		if (!this.isRunning) return;
 
 		try {
 			const content = await this.manager.app.vault.adapter.read(filePath);
 
-			// 自写抑制
+			// Self-write suppression
 			if (this.suppress.consume(filePath, content)) return;
 
 			const decoded = decodeNote(content);
-
-			// 跳过非 BPM 笔记
 			if (!decoded.isBpmNote || decoded.isMalformed) return;
 
 			const id = decoded.frontmatter.bpm_ro_id;
@@ -218,75 +207,56 @@ export class SyncService {
 			const mp = this.manager.settings.Plugins.find((p) => p.id === id);
 			if (!mp) return;
 
-			let changed = false;
+			// Guard: stop during IO
+			if (!this.isRunning) return;
 
-			// --- 受控写回（使用原始 rawValues 做严格类型校验） ---
+			let changed = false;
 			const raw = decoded.rawValues;
 
-			// desc：只接受 string
+			// desc (strict string)
 			if (typeof raw["bpm_rw_desc"] === "string" && raw["bpm_rw_desc"] !== mp.desc) {
-				mp.desc = raw["bpm_rw_desc"] as string;
-				changed = true;
+				mp.desc = raw["bpm_rw_desc"]; changed = true;
 			}
 
-			// note：只接受 string
+			// note (strict string)
 			if (typeof raw["bpm_rw_note"] === "string" && raw["bpm_rw_note"] !== mp.note) {
-				mp.note = raw["bpm_rw_note"] as string;
-				changed = true;
+				mp.note = raw["bpm_rw_note"]; changed = true;
 			}
 
-			// group：优先 bpm_rw_group（string），兼容 bpm_ro_group
-			const rwGroup = raw["bpm_rw_group"];
-			if (typeof rwGroup === "string" && rwGroup !== mp.group) {
-				mp.group = rwGroup;
-				changed = true;
-			} else if (typeof rwGroup !== "string" && decoded.isLegacy) {
-				// 旧笔记：写回 ro_group
-				const roGroup = raw["bpm_ro_group"];
-				if (typeof roGroup === "string" && roGroup !== mp.group) {
-					mp.group = roGroup;
-					changed = true;
+			// group: rw_group > ro_group (legacy)
+			if (typeof raw["bpm_rw_group"] === "string" && raw["bpm_rw_group"] !== mp.group) {
+				mp.group = raw["bpm_rw_group"]; changed = true;
+			} else if (decoded.isLegacy && typeof raw["bpm_ro_group"] === "string") {
+				const roG = raw["bpm_ro_group"] as string;
+				if (roG !== mp.group) { mp.group = roG; changed = true; }
+			}
+
+			// tags: strict string[] only — every element must be string
+			const rwTags = strictStringArray(raw["bpm_rw_tags"]);
+			if (rwTags.valid) {
+				if (!arraysEqual(rwTags.items, mp.tags || [])) {
+					mp.tags = rwTags.items; changed = true;
+				}
+			} else if (decoded.isLegacy) {
+				const roTags = strictStringArray(raw["bpm_ro_tags"]);
+				if (roTags.valid && !arraysEqual(roTags.items, mp.tags || [])) {
+					mp.tags = roTags.items; changed = true;
 				}
 			}
 
-			// tags：优先 bpm_rw_tags（string[]），兼容 bpm_ro_tags
-			const rwTags = raw["bpm_rw_tags"];
-			const roTags = raw["bpm_ro_tags"];
-			const tagsSource = Array.isArray(rwTags) ? rwTags : (decoded.isLegacy && Array.isArray(roTags) ? roTags : null);
-			if (Array.isArray(tagsSource)) {
-				const newTags = tagsSource.map(String).filter(Boolean);
-				const oldTags = mp.tags || [];
-				if (newTags.length !== oldTags.length || !newTags.every((t, i) => t === oldTags[i])) {
-					mp.tags = newTags;
-					changed = true;
-				}
-			}
-
-			// 条件可写 repo
-			const repo = raw["bpm_rwc_repo"];
-			const allowRepo =
-				typeof repo === "string" &&
-				repo.length > 0 &&
+			// repo (conditional)
+			if (typeof raw["bpm_rwc_repo"] === "string" && raw["bpm_rwc_repo"].length > 0 &&
 				!this.manager.settings.BPM_INSTALLED?.includes(id) &&
-				!this.manager.settings.REPO_MAP?.[id];
-			if (allowRepo) {
-				this.manager.settings.REPO_MAP[id] = repo;
+				!this.manager.settings.REPO_MAP?.[id]) {
+				this.manager.settings.REPO_MAP[id] = raw["bpm_rwc_repo"] as string;
 				changed = true;
 			}
 
-			// enabled 写回（需额外开关 + 严格 boolean）
-			if (this.manager.settings.PLUGIN_NOTES_ALLOW_ENABLED_WRITE) {
-				if (id === this.manager.manifest.id) {
-					// BPM 自身不可禁用
-					if (hasStrictBooleanEnabled(raw) && getStrictEnabledValue(raw) === false) {
-						if (this.manager.settings.DEBUG) {
-							console.warn("[BPM] Cannot disable BPM itself from notes.");
-						}
-					}
-				} else if (hasStrictBooleanEnabled(raw)) {
+			// enabled (strict boolean + switch)
+			if (this.manager.settings.PLUGIN_NOTES_ALLOW_ENABLED_WRITE && id !== this.manager.manifest.id) {
+				if (hasStrictBooleanEnabled(raw)) {
 					const targetEnabled = getStrictEnabledValue(raw)!;
 					if (targetEnabled !== mp.enabled) {
-						// 先尝试 API，成功后更新 mp.enabled
 						const isCurrentlyEnabled = this.manager.appPlugins.enabledPlugins.has(id);
 						if (targetEnabled !== isCurrentlyEnabled) {
 							try {
@@ -295,15 +265,13 @@ export class SyncService {
 								} else {
 									await this.manager.appPlugins.disablePluginAndSave(id);
 								}
-								// API 成功后才更新记录
 								mp.enabled = targetEnabled;
 								changed = true;
 							} catch (e) {
-								// API 失败，不更新 mp.enabled
-								console.error(`[BPM] Failed to toggle plugin "${id}" from note`, e);
+								console.error(`[BPM] Plugin toggle failed for "${id}"`, e);
+								// API failed — don't update mp.enabled
 							}
 						} else {
-							// 虽然 API 状态一致但记录不同步
 							mp.enabled = targetEnabled;
 							changed = true;
 						}
@@ -320,16 +288,12 @@ export class SyncService {
 			}
 		}
 	}
+}
 
-	/**
-	 * 使用自写抑制包装的导出。
-	 */
-	async exportWithSuppress(
-		manager: Manager,
-		index: import("./exporter").ExportDirIndex,
-		mp: import("src/data/types").ManagerPlugin
-	): Promise<boolean> {
-		const result = await exportPluginNote(manager, index, mp);
-		return result.written;
+function arraysEqual(a: string[], b: string[]): boolean {
+	if (a.length !== b.length) return false;
+	for (let i = 0; i < a.length; i++) {
+		if (a[i] !== b[i]) return false;
 	}
+	return true;
 }

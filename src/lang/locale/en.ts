@@ -1007,6 +1007,8 @@ export default {
     通知_ID已复制: 'ID copied',
 
     // Plugin Notes Export
+    设置_基础设置_导出目录_验证失败: 'Invalid export directory:',
+    通用_设置_保存成功: 'Settings saved.',
     插件笔记_导出成功: 'Plugin note exported: {name}',
     插件笔记_导出失败: 'Plugin note export failed: {name}',
     插件笔记_全量导出中: 'Exporting all plugin notes…',

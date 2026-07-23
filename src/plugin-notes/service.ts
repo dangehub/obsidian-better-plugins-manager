@@ -1,15 +1,15 @@
 /**
  * plugin-notes/service.ts
  *
- * 插件笔记导出服务主入口。
- * main.ts 持有单一实例，通过 start/stop/restart 管理生命周期。
- * 仅 service 是导出入口（无第二套导出流程）。
+ * 服务主入口。main.ts 持有单一实例。
+ * 在 two-way 模式下将 write hooks 传给 exporter 以实现自写抑制。
+ * 仅此 service 为导出入口。
  */
 
 import type Manager from "main";
-import { buildDirIndex, ExportDirIndex, exportPluginNote, exportAllPluginNotes } from "./exporter";
+import { buildDirIndex, ExportDirIndex, exportPluginNote, exportAllPluginNotes, WriteHooks } from "./exporter";
 import { SyncService } from "./sync";
-import { isValidExportPath, safeFileName } from "./types";
+import { isValidExportPath } from "./types";
 import { normalizePath } from "obsidian";
 
 export type SyncMode = "export-only" | "two-way";
@@ -30,11 +30,8 @@ export class PluginNotesService {
 	start(dirPath: string, mode: SyncMode): boolean {
 		if (this.started) return true;
 		const dir = (dirPath || "").trim();
-
-		// 空目录 = 关闭，安静返回
 		if (!dir) return true;
 
-		// 路径验证
 		const validation = isValidExportPath(dir);
 		if (!validation.valid) {
 			if (this.manager.settings.DEBUG) {
@@ -47,15 +44,21 @@ export class PluginNotesService {
 		this.currentMode = mode;
 		this.started = true;
 
-		// 启动时全量导出
 		void this.exportAll();
 
-		// 双向同步开启 watcher
 		if (mode === "two-way") {
 			this.syncService.start(this.currentDir);
 		}
 
 		return true;
+	}
+
+	/** Expose write hooks for sync service */
+	private getWriteHooks(): WriteHooks | undefined {
+		if (this.currentMode === "two-way") {
+			return this.syncService.writeHooks;
+		}
+		return undefined;
 	}
 
 	stop(): void {
@@ -71,59 +74,41 @@ export class PluginNotesService {
 		return this.start(dirPath, mode);
 	}
 
-	get isRunning(): boolean {
-		return this.started;
-	}
+	get isRunning(): boolean { return this.started; }
 
-	/**
-	 * 导出单个插件（委托给 exporter，使用自写抑制）。
-	 */
 	async exportSingle(pluginId: string): Promise<boolean> {
 		if (!this.started || !this.currentDir) return false;
-
 		try {
 			if (!this.index || this.index.dirPath !== this.currentDir) {
 				this.index = await buildDirIndex(this.manager, this.currentDir);
 			}
-
 			const mp = this.manager.settings.Plugins.find((p) => p.id === pluginId);
 			if (!mp) return false;
-
-			const result = await exportPluginNote(this.manager, this.index, mp);
+			const result = await exportPluginNote(this.manager, this.index, mp, {
+				hooks: this.getWriteHooks(),
+			});
 			return result.written;
 		} catch (e) {
-			if (this.manager.settings.DEBUG) {
-				console.error(`[BPM] exportSingle failed for "${pluginId}"`, e);
-			}
+			if (this.manager.settings.DEBUG) console.error(`[BPM] exportSingle failed for "${pluginId}"`, e);
 			return false;
 		}
 	}
 
-	/**
-	 * 全量导出所有插件笔记。
-	 */
 	async exportAll(): Promise<void> {
 		if (!this.started || !this.currentDir) return;
-
 		this.index = await buildDirIndex(this.manager, this.currentDir);
-
 		const plugins = this.manager.settings.Plugins || [];
 		for (const mp of plugins) {
 			try {
-				await exportPluginNote(this.manager, this.index, mp);
+				await exportPluginNote(this.manager, this.index, mp, {
+					hooks: this.getWriteHooks(),
+				});
 			} catch (e) {
-				if (this.manager.settings.DEBUG) {
-					console.error(`[BPM] exportAll failed for "${mp.id}"`, e);
-				}
+				if (this.manager.settings.DEBUG) console.error(`[BPM] exportAll failed for "${mp.id}"`, e);
 			}
 		}
 	}
 
-	get dirPath(): string {
-		return this.currentDir;
-	}
-
-	get syncMode(): SyncMode {
-		return this.currentMode;
-	}
+	get dirPath(): string { return this.currentDir; }
+	get syncMode(): SyncMode { return this.currentMode; }
 }

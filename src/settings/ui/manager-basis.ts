@@ -1,5 +1,5 @@
 import BaseSetting from "../base-setting";
-import { ButtonComponent, DropdownComponent, Setting, ToggleComponent, TextComponent } from "obsidian";
+import { ButtonComponent, DropdownComponent, Setting, ToggleComponent, TextComponent, Notice } from "obsidian";
 import Commands from "src/command";
 import { githubProxyEnabled } from "src/github-url";
 // import { GROUP_STYLE, ITEM_STYLE, TAG_STYLE } from "src/data/data";
@@ -209,23 +209,37 @@ export default class ManagerBasis extends BaseSetting {
             .setDesc(this.manager.translator.t("设置_基础设置_导出目录_描述"));
         const exportDirInput = new TextComponent(exportDirSetting.controlEl);
         exportDirInput.setPlaceholder(this.manager.translator.t("设置_基础设置_导出目录_示例"));
-        exportDirInput.setValue(this.settings.PLUGIN_NOTES_EXPORT_DIR || "");
+        // Local draft — don't write directly to settings
+        let exportDirDraft = this.settings.PLUGIN_NOTES_EXPORT_DIR || "";
+        exportDirInput.setValue(exportDirDraft);
         exportDirInput.onChange((value) => {
-            this.settings.PLUGIN_NOTES_EXPORT_DIR = value.trim();
+            exportDirDraft = value.trim();
         });
-        // 保存设置按钮
+        // 保存设置按钮: validate, then write
         const exportDirSaveBtn = new ButtonComponent(exportDirSetting.controlEl);
         exportDirSaveBtn.setButtonText(this.manager.translator.t("通用_保存_文本"));
         exportDirSaveBtn.setCta();
         exportDirSaveBtn.onClick(async () => {
+            // Path validation (imported from plugin-notes)
+            const { isValidExportPath } = await import("../../plugin-notes/types.js");
+            if (exportDirDraft && exportDirDraft.length > 0) {
+                const validation = isValidExportPath(exportDirDraft);
+                if (!validation.valid) {
+                    new Notice(this.manager.translator.t("设置_基础设置_导出目录_验证失败") + " " + (validation.reason || ""));
+                    return;
+                }
+            }
+            // Empty = valid (disable feature)
+            this.settings.PLUGIN_NOTES_EXPORT_DIR = exportDirDraft;
             await this.manager.saveSettings();
             this.manager.pluginNotesService?.restart(
                 this.settings.PLUGIN_NOTES_EXPORT_DIR,
                 this.settings.PLUGIN_NOTES_SYNC_MODE || "export-only"
             );
+            new Notice(this.manager.translator.t("通用_设置_保存成功"));
         });
 
-        // 同步模式
+        // 同步模式 (only safe when export dir is set)
         const syncModeBar = new Setting(this.containerEl)
             .setName(this.manager.translator.t("设置_基础设置_同步模式_标题"))
             .setDesc(this.manager.translator.t("设置_基础设置_同步模式_描述"));
@@ -236,10 +250,13 @@ export default class ManagerBasis extends BaseSetting {
         syncModeDropdown.onChange((value) => {
             this.settings.PLUGIN_NOTES_SYNC_MODE = value as "export-only" | "two-way";
             void this.manager.saveSettings();
-            this.manager.pluginNotesService?.restart(
-                this.settings.PLUGIN_NOTES_EXPORT_DIR,
-                this.settings.PLUGIN_NOTES_SYNC_MODE
-            );
+            // Only restart if export dir is valid
+            if (this.settings.PLUGIN_NOTES_EXPORT_DIR) {
+                this.manager.pluginNotesService?.restart(
+                    this.settings.PLUGIN_NOTES_EXPORT_DIR,
+                    this.settings.PLUGIN_NOTES_SYNC_MODE
+                );
+            }
         });
 
         // 允许从笔记更改启用状态
