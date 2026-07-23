@@ -18,6 +18,7 @@ import { ObsidianAppWithInternals, ObsidianPluginRegistry, RibbonNativeItem, Win
 import { RibbonModal } from './modal/ribbon-modal';
 import { githubProxyEnabled, resolveGithubUrl } from './github-url';
 
+import { PluginNotesService } from './plugin-notes/service';
 type UpdateSource = 'official' | 'github' | 'unknown';
 interface UpdateStatus {
     source: UpdateSource;
@@ -76,6 +77,7 @@ export default class Manager extends Plugin {
     public agreement!: Agreement;
     public repoResolver!: RepoResolver;
     public systemRibbonManager?: SystemRibbonManager;
+    public pluginNotesService?: PluginNotesService;
     public updateStatus: Record<string, UpdateStatus> = {};
     private updateProgressNotice: Notice | null = null;
 
@@ -155,6 +157,13 @@ export default class Manager extends Plugin {
 
         this.agreement = new Agreement(this);
         void this.startupCheckForUpdates();
+
+        // 启动插件笔记导出服务
+        this.pluginNotesService = new PluginNotesService(this);
+        this.pluginNotesService.start(
+            this.settings.PLUGIN_NOTES_EXPORT_DIR,
+            this.settings.PLUGIN_NOTES_SYNC_MODE || "export-only"
+        );
         void this.startupMaintainBetaSources();
 
         this.registerObsidianProtocolHandler("BPM-plugin-install", (params: ObsidianProtocolData) => {
@@ -179,6 +188,8 @@ export default class Manager extends Plugin {
 
         if (this.settings.DELAY) void this.disableDelaysForAllPlugins();
 
+        // 停止插件笔记导出服务
+        this.pluginNotesService?.stop();
         // 临走前再清理一次
         if (this.isRibbonManagerEnabled()) this.cleanRibbonItems();
 
@@ -490,9 +501,19 @@ export default class Manager extends Plugin {
         await this.saveSettings();
     }
 
-    // 保存单个插件配置。保留方法名以兼容旧调用点。
+    // 保存单个插件配置，并委托插件笔记导出服务。保留方法名以兼容旧调用点。
     public async savePluginAndExport(pluginId: string) {
         await this.saveSettings();
+        // 导出失败不影响设置保存
+        if (this.pluginNotesService) {
+            try {
+                await this.pluginNotesService.exportSingle(pluginId);
+            } catch (e) {
+                if (this.settings.DEBUG) {
+                    console.error('[BPM] savePluginAndExport: export failed for "' + pluginId + '"', e);
+                }
+            }
+        }
     }
 
     public showUpdateProgress(total: number): { dispose: () => void; update: (processed: number, currentId?: string) => void; cancel: () => void; isCancelled: () => boolean } {

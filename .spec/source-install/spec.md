@@ -19,6 +19,9 @@ related:
 - **GitHub 安装（插件）**：`installPluginFromGithub` 从指定 GitHub 仓库的 release 下载并安装 Obsidian 插件。优先使用 release asset（manifest.json + main.js + styles.css），asset 不完整时回退到 tag 对应的 raw 文件。安装后更新 BPM 插件记录、添加 `bpm-install` 标签（可选）、登记仓库映射、启用插件。
 - **GitHub 安装（主题）**：`installThemeFromGithub` 从 GitHub release 安装主题（theme.css + manifest.json），安装后可选激活主题。
 - **仓库解析**：`RepoResolver` 提供 `pluginId → GitHub 仓库地址` 的解析，优先级：settings.REPO_MAP → 本地缓存文件 → 官方社区插件列表（网络请求）。解析成功后将结果写入 `settings.REPO_MAP`。
+  - 支持单插件 `resolveRepo(pluginId)` 和批量 `resolveRepos(pluginIds)` 两种入口。
+  - 批量入口去重、最多一次社区列表请求、一次 `saveSettings`，不覆盖已有 REPO_MAP。
+  - 该解析器被 UI（更新检查）、设置页（手动映射）和 [[plugin-notes-export]]（导出笔记）共享。
 - **来源订阅**：`BetaSource` 记录插件/主题的 GitHub 仓库、更新模式（latest/frozen）、版本检查配置、自动更新开关。来源列表在安装 Hub 和 Sources 标签页中展示和管理。
 - **版本检查**：`syncSourceReleaseCheck` 拉取仓库的 release 列表，按配置（更新模式、兼容性、延迟天数）确定目标版本，更新 source 记录的版本字段。`sourceHasUpdate` 判断来源是否有可更新的版本。
 - **自动更新**：启动时可选按来源订阅自动安装新版本，尊重每个来源的 `autoUpdate` 开关。

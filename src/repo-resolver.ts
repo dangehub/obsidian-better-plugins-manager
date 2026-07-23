@@ -186,7 +186,76 @@ export class RepoResolver {
 	}
 
 	/**
-	 * 解析插件对应的 GitHub 仓库。
+	 * 批量解析多个插件的 GitHub 仓库。
+	 *
+	 * 优先级：
+	 * 1. settings.REPO_MAP（已确认映射）
+	 * 2. 本地 community cache
+	 * 3. 官方社区列表（整个批次最多请求一次）
+	 *
+	 * 对解析成功且 REPO_MAP 尚无值的映射统一写入 REPO_MAP；
+	 * 整个批次最多调用 manager.saveSettings 一次。
+	 * 不覆盖用户已有 REPO_MAP；不根据 author/id 猜 repo。
+	 */
+	public async resolveRepos(pluginIds: string[]): Promise<RepoMap> {
+		if (!pluginIds.length) return {};
+
+		await this.ensureCacheLoaded();
+
+		// 去重
+		const uniqueIds = [...new Set(pluginIds.map((id) => id.trim()).filter(Boolean))];
+		const result: RepoMap = {};
+		const missing: string[] = [];
+		let repoMapChanged = false;
+
+		for (const id of uniqueIds) {
+			// 1) settings.REPO_MAP
+			const fromSettings = this.settingsRepoMap[id];
+			if (fromSettings) {
+				result[id] = fromSettings;
+				continue;
+			}
+
+			// 2) 本地缓存
+			const fromCache = this.cache[id];
+			if (fromCache) {
+				result[id] = fromCache;
+				this.settingsRepoMap[id] = fromCache;
+				repoMapChanged = true;
+				continue;
+			}
+
+			missing.push(id);
+		}
+
+		// 3) 官方社区列表（最多一次网络请求）
+		if (missing.length > 0) {
+			const remote = await this.fetchCommunityList();
+
+			for (const id of missing) {
+				const found = remote[id];
+				if (found) {
+					result[id] = found;
+					this.settingsRepoMap[id] = found;
+					repoMapChanged = true;
+				}
+			}
+		}
+
+		// 批量保存（无论 cache 还是 remote 来源），save 失败不阻断返回 result
+		if (repoMapChanged) {
+			try {
+				await this.manager.saveSettings();
+			} catch (e) {
+				console.error("[BPM] resolveRepos: failed to save REPO_MAP", e);
+			}
+		}
+
+		return result;
+	}
+
+	/**
+	 * 解析单个插件对应的 GitHub 仓库（复用批量逻辑）。
 	 *
 	 * 优先级：
 	 * 1. settings.REPO_MAP：用户或 BPM 安装流程确认过的映射。
@@ -194,30 +263,8 @@ export class RepoResolver {
 	 * 3. 官方社区列表：网络可用时刷新并写入缓存。
 	 */
 	public async resolveRepo(pluginId: string): Promise<string | null> {
-		const normalizedPluginId = pluginId.trim();
-		if (!normalizedPluginId) return null;
-
-		await this.ensureCacheLoaded();
-
-		const fromSettings = this.settingsRepoMap[normalizedPluginId];
-		if (fromSettings) return fromSettings;
-
-		const fromCache = this.cache[normalizedPluginId];
-		if (fromCache) return fromCache;
-
-		const remote = await this.fetchCommunityList();
-		const found = remote[normalizedPluginId];
-		if (!found) return null;
-
-		/**
-		 * 保持旧行为：把已解析成功的仓库写入 settings.REPO_MAP。
-		 *
-		 * 这样导出笔记、更新检查和后续离线解析都能使用同一份“已确认映射”。
-		 * 只保存 settings，不触发额外导出，避免保存链路互相递归。
-		 */
-		this.settingsRepoMap[normalizedPluginId] = found;
-		await this.manager.saveSettings();
-		return found;
+		const result = await this.resolveRepos([pluginId]);
+		return result[pluginId.trim()] || null;
 	}
 
 	/**

@@ -200,6 +200,36 @@ const migrate032 = async (manager: Manager): Promise<void> => {
 };
 
 /** 按版本升序排列的迁移表。新增迁移只需要追加一个更高版本。 */
+/**
+ * 迁移 1.0.15：将旧 EXPORT_DIR 迁移到 PLUGIN_NOTES_EXPORT_DIR。
+ *
+ * EXPORT_DIR 仍保留用于兼容旧数据，但新功能仅读取 PLUGIN_NOTES_EXPORT_DIR。
+ * 同时添加新的默认值字段（PLUGIN_NOTES_SYNC_MODE / PLUGIN_NOTES_ALLOW_ENABLED_WRITE）。
+ */
+export const migrate1015 = async (manager: Manager): Promise<boolean> => {
+	let changed = false;
+
+	// 迁移旧导出目录
+	const oldDir = manager.settings.EXPORT_DIR;
+	if (oldDir && !manager.settings.PLUGIN_NOTES_EXPORT_DIR) {
+		manager.settings.PLUGIN_NOTES_EXPORT_DIR = oldDir;
+		changed = true;
+	}
+
+	// 确保新字段有默认值
+	if (!manager.settings.PLUGIN_NOTES_SYNC_MODE) {
+		manager.settings.PLUGIN_NOTES_SYNC_MODE = "export-only";
+		changed = true;
+	}
+
+	if (typeof manager.settings.PLUGIN_NOTES_ALLOW_ENABLED_WRITE !== "boolean") {
+		manager.settings.PLUGIN_NOTES_ALLOW_ENABLED_WRITE = false;
+		changed = true;
+	}
+
+	return changed;
+};
+
 const migrations: Migration[] = [
 	{
 		version: "0.3.1",
@@ -208,6 +238,10 @@ const migrations: Migration[] = [
 	{
 		version: "0.3.2",
 		run: migrate032,
+	},
+	{
+		version: "1.0.15",
+		run: migrate1015,
 	},
 ];
 
@@ -222,7 +256,11 @@ export const runMigrations = async (manager: Manager): Promise<void> => {
 	const currentVersion = manager.manifest.version;
 	const lastMigrationVersion = manager.settings.MIGRATION_VERSION || "";
 	const pendingMigrations = migrations
-		.filter((migration) => compareVersions(migration.version, lastMigrationVersion) > 0)
+		.filter((migration) => {
+			// 只运行 last < version <= current，禁止提前执行未来版本迁移
+			return compareVersions(migration.version, lastMigrationVersion) > 0
+				&& compareVersions(migration.version, currentVersion) <= 0;
+		})
 		.sort((a, b) => compareVersions(a.version, b.version));
 
 	let anyChange = false;
@@ -246,10 +284,8 @@ export const runMigrations = async (manager: Manager): Promise<void> => {
 	}
 
 	/**
-	 * 迁移表不一定每个发布版本都有条目。
-	 *
-	 * 当插件升级到没有新迁移的版本时，仍把 MIGRATION_VERSION 推进到当前插件版本，
-	 * 表示“截至当前版本无需额外迁移”，避免未来每次启动都重新扫描旧迁移表。
+	 * 推进到当前插件版本，但不得超过 currentVersion。
+	 * 防止 MIGRATION_VERSION 因迁移表含未来版本而被意外提前。
 	 */
 	if (!manager.settings.MIGRATION_VERSION || compareVersions(manager.settings.MIGRATION_VERSION, currentVersion) < 0) {
 		manager.settings.MIGRATION_VERSION = currentVersion;

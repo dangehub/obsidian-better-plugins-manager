@@ -109,6 +109,13 @@ export default {
     提示_BPM忽略_操作拦截: 'This plugin is tagged with "bpm-ignore", operations are disabled in BPM.',
     设置_基础设置_导出目录_示例: 'e.g., BPM-Export',
 
+    设置_基础设置_同步模式_标题: 'Sync mode',
+    设置_基础设置_同步模式_描述: 'Export-only: BPM writes plugin info; no file monitoring. Two-way: changes in exported notes are written back to BPM.',
+    设置_基础设置_同步模式_仅导出: 'Export only',
+    设置_基础设置_同步模式_双向: 'Two-way (monitor & writeback)',
+    设置_基础设置_允许笔记启用_标题: 'Allow enable/disable from notes',
+    设置_基础设置_允许笔记启用_描述: 'When enabled in two-way mode, changing bpm_rw_enabled in the note will enable/disable the plugin. Default: off. BPM itself cannot be disabled from notes.',
+
     设置_基础设置_导出提示_标题: 'Frontmatter conventions',
     设置_基础设置_导出提示_描述: 'Read-only: bpm_ro_id/name/group/tags/delay/installed_via_bpm; writable: bpm_rw_desc/note/enabled; conditional: bpm_rwc_repo (only when official match is missing and not BPM-installed).',
     设置_基础设置_GITHUB_TOKEN_标题: 'GitHub API Token',
@@ -998,4 +1005,13 @@ export default {
     分享_导出插件_提示: 'Export plugins',
     分享_下载插件_提示: 'Download plugin',
     通知_ID已复制: 'ID copied',
+
+    // Plugin Notes Export
+    设置_基础设置_导出目录_验证失败: 'Invalid export directory:',
+    通用_设置_保存成功: 'Settings saved.',
+    插件笔记_导出成功: 'Plugin note exported: {name}',
+    插件笔记_导出失败: 'Plugin note export failed: {name}',
+    插件笔记_全量导出中: 'Exporting all plugin notes…',
+    插件笔记_全量导出完成: 'Exported {written}/{total} plugin notes ({skipped} skipped, {errors} errors).',
+    插件笔记_冲突跳过: 'Skipped duplicate plugin note for {id}.',
 }
