@@ -202,8 +202,16 @@ export interface ManagerSettings {
     SHARED_VAULTS: SharedVaultEntry[];
 
     // 旧版 Markdown 导出目录，仅保留用于迁移旧数据；新版导入导出使用管理器内的配置包页面。
-    /** @deprecated 插件信息导出目录，相对 vault 根目录；新版不再读取。 */
+    /** @deprecated 插件信息导出目录，保留用于迁移旧数据；新功能使用 PLUGIN_NOTES_EXPORT_DIR。 */
     EXPORT_DIR: string;
+
+    // 插件笔记导出（plugin-notes-export）
+    /** 插件笔记导出目录，相对 vault 根目录。空字符串表示不启用。 */
+    PLUGIN_NOTES_EXPORT_DIR: string;
+    /** 同步模式："export-only"（默认，仅导出）或 "two-way"（双向同步）。 */
+    PLUGIN_NOTES_SYNC_MODE: "export-only" | "two-way";
+    /** 是否允许从笔记中更改插件启用状态（仅在 two-way 模式下生效）。默认 false。 */
+    PLUGIN_NOTES_ALLOW_ENABLED_WRITE: boolean;
 
     // 冲突排查页
     /** 插件冲突排查流程的持久化状态，用于关闭弹窗或重启后恢复进度。 */
@@ -295,6 +303,11 @@ export const DEFAULT_SETTINGS: ManagerSettings = {
 
     // 旧版 Markdown 导出兼容字段
     EXPORT_DIR: "",
+
+    // 插件笔记导出（plugin-notes-export）
+    PLUGIN_NOTES_EXPORT_DIR: "",
+    PLUGIN_NOTES_SYNC_MODE: "export-only",
+    PLUGIN_NOTES_ALLOW_ENABLED_WRITE: false,
 
     // 冲突排查页
 }

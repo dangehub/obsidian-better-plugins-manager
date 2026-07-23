@@ -30,11 +30,12 @@ related:
   - **分组**：创建/重命名/改色/删除分组。
   - **标签**：创建/重命名/改色/删除标签。
   - **延迟**：创建和管理延迟启动配置（名称 + 延迟秒数）。
-- **数据模型**：`ManagerSettings` 定义了完整的用户设置结构，包含 70+ 个配置字段。`DEFAULT_SETTINGS` 提供所有字段的合理默认值。
+- **数据模型**：`ManagerSettings` 定义了完整的用户设置结构，包含 70+ 个配置字段。`DEFAULT_SETTINGS` 提供所有字段的合理默认值。插件笔记导出相关配置（`PLUGIN_NOTES_EXPORT_DIR`、`PLUGIN_NOTES_SYNC_MODE`、`PLUGIN_NOTES_ALLOW_ENABLED_WRITE`）由 [[plugin-notes-export]] 管理。
 - **持久化**：通过 `loadSettings` / `saveSettings`（封装 `loadData` / `saveData`）与 Obsidian 插件数据系统集成。设置修改通过 `saveSettings` 落盘。
 - **数据迁移**：`runMigrations` 维护 `MIGRATION_VERSION` 字段，按版本顺序执行增量迁移，确保旧版 `data.json` 与新格式兼容。
 
 ## 边界
 
 - 设置面板不读取或修改 Obsidian 核心设置，仅管理 BPM 自身的配置项。
+- 插件笔记导出设置（目录、模式、启用状态写回）展示在基础设置页面，默认安全模式为不导出、仅单向，用户需显式配置后才会创建或读取文件。
 - 迁移只向前兼容；不支持降级恢复旧版本数据格式。

@@ -200,6 +200,36 @@ const migrate032 = async (manager: Manager): Promise<void> => {
 };
 
 /** 按版本升序排列的迁移表。新增迁移只需要追加一个更高版本。 */
+/**
+ * 迁移 0.3.3：将旧 EXPORT_DIR 迁移到 PLUGIN_NOTES_EXPORT_DIR。
+ *
+ * EXPORT_DIR 仍保留用于兼容旧数据，但新功能仅读取 PLUGIN_NOTES_EXPORT_DIR。
+ * 同时添加新的默认值字段（PLUGIN_NOTES_SYNC_MODE / PLUGIN_NOTES_ALLOW_ENABLED_WRITE）。
+ */
+const migrate033 = async (manager: Manager): Promise<boolean> => {
+	let changed = false;
+
+	// 迁移旧导出目录
+	const oldDir = manager.settings.EXPORT_DIR;
+	if (oldDir && !manager.settings.PLUGIN_NOTES_EXPORT_DIR) {
+		manager.settings.PLUGIN_NOTES_EXPORT_DIR = oldDir;
+		changed = true;
+	}
+
+	// 确保新字段有默认值
+	if (!manager.settings.PLUGIN_NOTES_SYNC_MODE) {
+		manager.settings.PLUGIN_NOTES_SYNC_MODE = "export-only";
+		changed = true;
+	}
+
+	if (typeof manager.settings.PLUGIN_NOTES_ALLOW_ENABLED_WRITE !== "boolean") {
+		manager.settings.PLUGIN_NOTES_ALLOW_ENABLED_WRITE = false;
+		changed = true;
+	}
+
+	return changed;
+};
+
 const migrations: Migration[] = [
 	{
 		version: "0.3.1",
@@ -208,6 +238,10 @@ const migrations: Migration[] = [
 	{
 		version: "0.3.2",
 		run: migrate032,
+	},
+	{
+		version: "0.3.3",
+		run: migrate033,
 	},
 ];
 

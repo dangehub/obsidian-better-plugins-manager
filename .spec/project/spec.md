@@ -38,3 +38,4 @@ BPM 的功能划分为以下业务领域，每个领域由一个独立的 spec �
 | [[conflict-diagnosis]] | 插件冲突二分排查算法、排查会话状态管理、报告生成 |
 | [[ribbon-manager]] | 侧边栏图标排序、显隐控制、拖拽隐藏 |
 | [[localization]] | 多语言翻译系统与语言文件 |
+| [[plugin-notes-export]] | 插件信息 Markdown 导出与 Obsidian Bases 集成 |

@@ -201,6 +201,64 @@ export default class ManagerBasis extends BaseSetting {
             Commands(this.app, this.manager);
         });
 
+        heading("设置_基础设置_分组_插件笔记导出");
+
+        // 插件笔记导出目录
+        const exportDirSetting = new Setting(this.containerEl)
+            .setName(this.manager.translator.t("设置_基础设置_导出目录_标题"))
+            .setDesc(this.manager.translator.t("设置_基础设置_导出目录_描述"));
+        const exportDirInput = new TextComponent(exportDirSetting.controlEl);
+        exportDirInput.setPlaceholder(this.manager.translator.t("设置_基础设置_导出目录_示例"));
+        exportDirInput.setValue(this.settings.PLUGIN_NOTES_EXPORT_DIR || "");
+        exportDirInput.onChange((value) => {
+            this.settings.PLUGIN_NOTES_EXPORT_DIR = value.trim();
+        });
+        // 保存设置按钮
+        const exportDirSaveBtn = new ButtonComponent(exportDirSetting.controlEl);
+        exportDirSaveBtn.setButtonText(this.manager.translator.t("通用_保存_文本"));
+        exportDirSaveBtn.setCta();
+        exportDirSaveBtn.onClick(async () => {
+            await this.manager.saveSettings();
+            this.manager.pluginNotesService?.restart(
+                this.settings.PLUGIN_NOTES_EXPORT_DIR,
+                this.settings.PLUGIN_NOTES_SYNC_MODE || "export-only"
+            );
+        });
+
+        // 同步模式
+        const syncModeBar = new Setting(this.containerEl)
+            .setName(this.manager.translator.t("设置_基础设置_同步模式_标题"))
+            .setDesc(this.manager.translator.t("设置_基础设置_同步模式_描述"));
+        const syncModeDropdown = new DropdownComponent(syncModeBar.controlEl);
+        syncModeDropdown.addOption("export-only", this.manager.translator.t("设置_基础设置_同步模式_仅导出"));
+        syncModeDropdown.addOption("two-way", this.manager.translator.t("设置_基础设置_同步模式_双向"));
+        syncModeDropdown.setValue(this.settings.PLUGIN_NOTES_SYNC_MODE || "export-only");
+        syncModeDropdown.onChange((value) => {
+            this.settings.PLUGIN_NOTES_SYNC_MODE = value as "export-only" | "two-way";
+            void this.manager.saveSettings();
+            this.manager.pluginNotesService?.restart(
+                this.settings.PLUGIN_NOTES_EXPORT_DIR,
+                this.settings.PLUGIN_NOTES_SYNC_MODE
+            );
+        });
+
+        // 允许从笔记更改启用状态
+        const allowEnabledBar = new Setting(this.containerEl)
+            .setName(this.manager.translator.t("设置_基础设置_允许笔记启用_标题"))
+            .setDesc(this.manager.translator.t("设置_基础设置_允许笔记启用_描述"));
+        const allowEnabledToggle = new ToggleComponent(allowEnabledBar.controlEl);
+        allowEnabledToggle.setValue(this.settings.PLUGIN_NOTES_ALLOW_ENABLED_WRITE || false);
+        allowEnabledToggle.setDisabled(this.settings.PLUGIN_NOTES_SYNC_MODE !== "two-way");
+        allowEnabledToggle.onChange((value) => {
+            this.settings.PLUGIN_NOTES_ALLOW_ENABLED_WRITE = value;
+            void this.manager.saveSettings();
+        });
+
+        // Frontmatter 约定说明
+        new Setting(this.containerEl)
+            .setName(this.manager.translator.t("设置_基础设置_导出提示_标题"))
+            .setDesc(this.manager.translator.t("设置_基础设置_导出提示_描述"));
+
         heading("设置_基础设置_分组_开发网络");
 
         const debugBar = new Setting(this.containerEl)
