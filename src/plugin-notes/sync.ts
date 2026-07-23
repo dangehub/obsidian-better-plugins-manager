@@ -81,9 +81,9 @@ interface SuppressToken {
 }
 
 class WriteSuppression {
-	private tokens: SuppressToken[] = [];
+	tokens: SuppressToken[] = []; // public for test seam
 	private nextId = 0;
-	private ttlMs = 30000; // 30s TTL
+	public ttlMs = 30000; // public for test seam
 
 	register(path: string, content: string): string {
 		const id = `tok-${++this.nextId}`;
