@@ -1,7 +1,7 @@
 ---
 concern: 将 BPM Spec 重组为树状业务节点
 by: unknown
-status: open
+status: landed
 nodes: project
 created: 2026-07-23T17:50:19.564Z
 ---
