@@ -19,20 +19,22 @@ Keep plugin-heavy Obsidian vaults fast and manageable with delayed startup, batc
   ·
   <a href="docs/README_RU.md">Русский</a>
   ·
-  <a href="https://github.com/eondrcode/obsidian-manager/releases">Releases</a>
+  <a href="https://github.com/dangehub/obsidian-better-plugins-manager/releases">Releases</a>
   ·
   <a href="https://ifdian.net/a/eondr">Support</a>
 </p>
 
+<p><em>This is a community fork maintained by <a href="https://github.com/dangehub">dangehub</a>, based on <a href="https://github.com/eondrcode/obsidian-manager">eondrcode/obsidian-manager</a>.</em></p>
+
 <p>
-  <a href="https://github.com/eondrcode/obsidian-manager/releases">
-    <img alt="Latest Release" src="https://img.shields.io/github/v/release/eondrcode/obsidian-manager?style=flat-square&label=release">
+  <a href="https://github.com/dangehub/obsidian-better-plugins-manager/releases">
+    <img alt="Latest Release" src="https://img.shields.io/github/v/release/dangehub/obsidian-better-plugins-manager?style=flat-square&label=release">
   </a>
-  <img alt="GitHub Downloads" src="https://img.shields.io/github/downloads/eondrcode/obsidian-manager/total?style=flat-square&label=downloads">
-  <img alt="Last Commit" src="https://img.shields.io/github/last-commit/eondrcode/obsidian-manager?style=flat-square&label=last%20commit">
-  <img alt="Issues" src="https://img.shields.io/github/issues/eondrcode/obsidian-manager?style=flat-square&label=issues">
-  <img alt="Stars" src="https://img.shields.io/github/stars/eondrcode/obsidian-manager?style=flat-square&label=stars">
-  <img alt="License" src="https://img.shields.io/github/license/eondrcode/obsidian-manager?style=flat-square&label=license">
+  <img alt="GitHub Downloads" src="https://img.shields.io/github/downloads/dangehub/obsidian-better-plugins-manager/total?style=flat-square&label=downloads">
+  <img alt="Last Commit" src="https://img.shields.io/github/last-commit/dangehub/obsidian-better-plugins-manager?style=flat-square&label=last%20commit">
+  <img alt="Issues" src="https://img.shields.io/github/issues/dangehub/obsidian-better-plugins-manager?style=flat-square&label=issues">
+  <img alt="Stars" src="https://img.shields.io/github/stars/dangehub/obsidian-better-plugins-manager?style=flat-square&label=stars">
+  <img alt="License" src="https://img.shields.io/github/license/dangehub/obsidian-better-plugins-manager?style=flat-square&label=license">
 </p>
 
 <p>
@@ -62,6 +64,8 @@ It helps you keep startup responsive, organize plugins by workflow, install plug
 | 🚀 Startup | 📦 Management | 🏷️ Organization | 📥 Installation | 🔍 Diagnosis |
 |------------|---------------|------------------|-----------------|--------------|
 | Delayed plugin startup and startup self-checks | Batch enable/disable, quick search, and status filters | Groups, tags, notes, descriptions, and custom names | Install from GitHub repositories and release versions | Guided conflict troubleshooting with report generation |
+
+> **Plugin Notes Export (v1.1.0):** Export installed plugin metadata to Markdown files for Obsidian Bases, with optional two-way sync and shared repository resolution.
 
 ---
 
@@ -171,7 +175,7 @@ Recommended for most users.
 
 Use this when you want to install a GitHub release directly.
 
-1. Download the [latest release](https://github.com/eondrcode/obsidian-manager/releases).
+1. Download the [latest release](https://github.com/dangehub/obsidian-better-plugins-manager/releases).
 2. Copy `main.js`, `manifest.json`, and `styles.css` into `.obsidian/plugins/better-plugins-manager/`.
 3. Restart Obsidian.
 4. Enable **Better Add-on Manager** from **Settings → Community Plugins**.
@@ -254,7 +258,14 @@ Taking over keeps delayed startup, enabled state, and BPM's plugin records consi
 
 For current versions, use the **Transfer Pack** tab to move setups between vaults. It exports and imports plugin lists, themes, selected plugin configs, groups, tags, delay presets, layout data, ribbon order, source subscriptions, install history, and workspace preferences.
 
-The older Markdown/frontmatter export for Obsidian Base is kept only for legacy data compatibility. New setups should use **Transfer Pack** instead of configuring a Base export folder.
+### Plugin Notes Export (v1.1.0)
+
+BPM can export installed plugin metadata (name, version, description, repository, enabled state, tags) as Markdown files into a vault directory, readable in Obsidian Bases (Properties).
+
+- **Export-only mode**: One-way write for use as a plugin inventory.
+- **Two-way mode**: Editing desc, note, group, tags, and repo fields in the exported files syncs back to BPM settings. Enabled-state write-back requires explicit opt-in.
+- **Shared pipeline**: Export shares the RepoResolver data chain with install-source management — local cache, community listing, and network fallback in a single batch.
+- **Migration & safety**: Legacy `EXPORT_DIR` auto-migrates to `PLUGIN_NOTES_EXPORT_DIR`. Paths are validated against traversal, absolute paths, and `.obsidian` system directories.
 
 ---
 
@@ -298,6 +309,12 @@ BPM settings are split into focused pages:
 | iOS / iPadOS | ✅ |
 
 The plugin automatically switches between desktop/mobile layouts based on the platform.
+
+---
+
+## AI-Assisted Development
+
+Version 1.1.0 was developed with AI-assisted (vibe coding) workflows, following best practices from the Obsidian Sample Plugin Plus reference library. All features were validated through automated tests (unit + integration coverage) and verified in a test vault under real Obsidian loading conditions.
 
 ---
 

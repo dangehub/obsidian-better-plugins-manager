@@ -19,20 +19,22 @@
   ·
   <a href="README_RU.md">Русский</a>
   ·
-  <a href="https://github.com/eondrcode/obsidian-manager/releases">Releases</a>
+  <a href="https://github.com/dangehub/obsidian-better-plugins-manager/releases">Releases</a>
   ·
   <a href="https://ifdian.net/a/eondr">支持作者</a>
 </p>
 
+<p><em>本插件由 <a href="https://github.com/dangehub">dangehub</a> 维护的社区 fork，基于 <a href="https://github.com/eondrcode/obsidian-manager">eondrcode/obsidian-manager</a>。</em></p>
+
 <p>
-  <a href="https://github.com/eondrcode/obsidian-manager/releases">
-    <img alt="Latest Release" src="https://img.shields.io/github/v/release/eondrcode/obsidian-manager?style=flat-square&label=release">
+  <a href="https://github.com/dangehub/obsidian-better-plugins-manager/releases">
+    <img alt="Latest Release" src="https://img.shields.io/github/v/release/dangehub/obsidian-better-plugins-manager?style=flat-square&label=release">
   </a>
-  <img alt="GitHub Downloads" src="https://img.shields.io/github/downloads/eondrcode/obsidian-manager/total?style=flat-square&label=downloads">
-  <img alt="Last Commit" src="https://img.shields.io/github/last-commit/eondrcode/obsidian-manager?style=flat-square&label=last%20commit">
-  <img alt="Issues" src="https://img.shields.io/github/issues/eondrcode/obsidian-manager?style=flat-square&label=issues">
-  <img alt="Stars" src="https://img.shields.io/github/stars/eondrcode/obsidian-manager?style=flat-square&label=stars">
-  <img alt="License" src="https://img.shields.io/github/license/eondrcode/obsidian-manager?style=flat-square&label=license">
+  <img alt="GitHub Downloads" src="https://img.shields.io/github/downloads/dangehub/obsidian-better-plugins-manager/total?style=flat-square&label=downloads">
+  <img alt="Last Commit" src="https://img.shields.io/github/last-commit/dangehub/obsidian-better-plugins-manager?style=flat-square&label=last%20commit">
+  <img alt="Issues" src="https://img.shields.io/github/issues/dangehub/obsidian-better-plugins-manager?style=flat-square&label=issues">
+  <img alt="Stars" src="https://img.shields.io/github/stars/dangehub/obsidian-better-plugins-manager?style=flat-square&label=stars">
+  <img alt="License" src="https://img.shields.io/github/license/dangehub/obsidian-better-plugins-manager?style=flat-square&label=license">
 </p>
 
 <p>
@@ -62,6 +64,8 @@
 | 🚀 启动 | 📦 管理 | 🏷️ 整理 | 📥 安装 | 🔍 诊断 |
 |--------|--------|----------|---------|---------|
 | 插件延迟启动和启动自检 | 批量启用/禁用、快速搜索和状态筛选 | 分组、标签、备注、描述和自定义名称 | 从 GitHub 仓库和 Release 安装 | 引导式冲突排查和报告生成 |
+
+> **插件笔记导出（v1.1.0）：** 将已安装插件元数据导出为 Markdown 文件，可在 Obsidian Bases 中查阅，支持可选的双向同步和共享仓库解析。
 
 ---
 
@@ -171,7 +175,7 @@ Conflict Diagnosis 通过步骤引导插件冲突测试，并把测试状态和�
 
 适合直接安装 GitHub Release。
 
-1. 下载 [latest release](https://github.com/eondrcode/obsidian-manager/releases)。
+1. 下载 [latest release](https://github.com/dangehub/obsidian-better-plugins-manager/releases)。
 2. 将 `main.js`、`manifest.json` 和 `styles.css` 复制到 `.obsidian/plugins/better-plugins-manager/`。
 3. 重启 Obsidian。
 4. 在 **设置 → 第三方插件** 中启用 **Better Plugins Manager**。
@@ -252,7 +256,14 @@ BPM 是一个本地 Obsidian 插件管理器，但部分功能会有意使用外
 
 当前版本建议使用 **Transfer Pack** 在不同库之间迁移配置。它可以导出和导入插件列表、主题、选中的插件配置、分组、标签、延迟预设、布局数据、Ribbon 顺序、来源订阅、安装历史和工作区偏好。
 
-旧版 Markdown/frontmatter 的 Obsidian Base 导出仅保留用于兼容旧数据。新配置建议使用 **Transfer Pack**，不要再配置 Base 导出目录。
+### 插件笔记导出（v1.1.0）
+
+BPM 现已支持将已安装插件的元数据（名称、版本、描述、仓库、启用状态、标签等）以 Markdown 文件形式导出到库内目录，可在 Obsidian Bases（属性面板）中直接查看和使用。
+
+- **仅导出模式**：单向写入，生成插件清单目录。
+- **双向同步模式**：编辑导出文件中的 desc、note、group、tags、repo 字段可反向同步到 BPM 设置。启用状态回写需在设置中额外授权，以降低误操作风险。
+- **共享解析管道**：导出与安装来源管理共用 RepoResolver 数据链，经过本地缓存 → 社区列表 → 网络请求的分级解析，一次批量请求仅一次网络调用。
+- **迁移与安全**：旧版 `EXPORT_DIR` 设置自动迁移至 `PLUGIN_NOTES_EXPORT_DIR`。导出路径严格校验，拒绝绝对路径、路径遍历（`..`）和 `.obsidian` 系统目录。
 
 ---
 
@@ -296,6 +307,12 @@ BPM 设置按功能拆分为多个页面：
 | iOS / iPadOS | ✅ |
 
 插件会根据平台自动切换桌面/移动端布局。
+
+---
+
+## AI 辅助开发说明
+
+1.1.0 版本采用 AI 辅助（vibe coding）工作流开发，遵循 Obsidian Sample Plugin Plus 参考库的最佳实践。所有功能经过自动化测试（单元测试 + 集成覆盖）验证，并在测试 Vault 中通过实际加载确认。
 
 ---
 
