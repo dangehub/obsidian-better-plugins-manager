@@ -25,17 +25,42 @@ related:
 
 ## 业务功能（子节点）
 
-BPM 的功能划分为以下业务领域，每个领域由一个独立的 spec 节点管辖：
+BPM 的功能按业务领域分层组织。以下为顶层分组节点及其包含的叶子节点。每个分组节点在其 spec 中进一步描述子节点职责。
+
+### [[platform-foundation]] — 平台基础
+
+BPM 在 Obsidian 宿主环境中的基础能力，为所有上层功能提供运行底座。
 
 | 节点 | 职责 |
 |------|------|
 | [[lifecycle]] | 插件启动、自检、迁移、延迟启动、自动接管、卸载清理 |
+| [[settings]] | 设置页面 UI、用户偏好持久化、数据模型定义 |
+| [[localization]] | 多语言翻译系统与语言文件 |
+
+### [[plugin-management]] — 插件管理
+
+BPM 的核心业务域：插件的日常管理能力。
+
+| 节点 | 职责 |
+|------|------|
 | [[manager-ui]] | BPM 主界面弹窗（插件视图、筛选、分组、标签、外观总览）及其辅助弹窗 |
 | [[plugin-operations]] | 插件启停命令、状态快照、方案管理、命令面板集成 |
-| [[settings]] | 设置页面 UI、用户偏好持久化、数据模型定义 |
+| [[plugin-notes-export]] | 插件信息 Markdown 导出与 Obsidian Bases 集成 |
+| [[conflict-diagnosis]] | 插件冲突二分排查算法、排查会话状态管理、报告生成 |
+
+### [[plugin-distribution]] — 插件分发
+
+插件的安装来源管理与配置迁移能力。
+
+| 节点 | 职责 |
+|------|------|
 | [[source-install]] | GitHub 安装流程、仓库解析、来源订阅、版本检查与自动更新 |
 | [[transfer-pack]] | 配置包的导出、导入、预览与应用 |
-| [[conflict-diagnosis]] | 插件冲突二分排查算法、排查会话状态管理、报告生成 |
+
+### [[workspace-integration]] — 工作区集成
+
+BPM 与 Obsidian 工作区边缘界面的交互。
+
+| 节点 | 职责 |
+|------|------|
 | [[ribbon-manager]] | 侧边栏图标排序、显隐控制、拖拽隐藏 |
-| [[localization]] | 多语言翻译系统与语言文件 |
-| [[plugin-notes-export]] | 插件信息 Markdown 导出与 Obsidian Bases 集成 |
