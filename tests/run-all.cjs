@@ -186,19 +186,19 @@ testAsync('2e', async () => { resetVault(); setFile('td/b.md', '---\nno-kv\n---\
 testAsync('3a', async () => {
   resetVault(); const mgr = makeMgr({ settings: { Plugins: [{ id: 'my-p', name: 'My', enabled: true, desc: '', note: '', group: '', tags: [], delay: '' }] }, manifests: { 'my-p': { version: '1.0' } } });
   const idx = await buildDirIndex(mgr, 'td'); await exportPluginNote(mgr, idx, mgr.settings.Plugins[0]);
-  assert(getFile('td/my-p.md')); assert(!getFile('td/My.md'));
+  assert(getFile('td/My.md')); assert(!getFile('td/my-p.md'));
 });
 testAsync('3b', async () => {
   resetVault(); const mgr = makeMgr({ settings: { Plugins: [{ id: 'p1', name: 'Old', enabled: true, desc: '', note: '', group: '', tags: [], delay: '' }] }, manifests: { p1: { version: '1.0' } } });
   const idx = await buildDirIndex(mgr, 'td'); await exportPluginNote(mgr, idx, mgr.settings.Plugins[0]);
-  assert(getFile('td/p1.md')); mgr.settings.Plugins[0].name = 'New';
-  await exportPluginNote(mgr, idx, mgr.settings.Plugins[0]); assert(!getFile('td/New.md'));
+  assert(getFile('td/Old.md')); mgr.settings.Plugins[0].name = 'New';
+  await exportPluginNote(mgr, idx, mgr.settings.Plugins[0]); assert(!getFile('td/Old.md')); assert(getFile('td/New.md'));
 });
 testAsync('3c', async () => {
   resetVault(); setFile('td/Old.md', '---\nbpm_ro_id: p1\n---\n');
   const mgr = makeMgr({ settings: { Plugins: [{ id: 'p1', name: 'Old', enabled: true, desc: '', note: '', group: '', tags: [], delay: '' }] }, manifests: { p1: { version: '1.0' } } });
   const idx = await buildDirIndex(mgr, 'td'); await exportPluginNote(mgr, idx, mgr.settings.Plugins[0]);
-  assert(!getFile('td/Old.md')); assert(getFile('td/p1.md'));
+  assert(getFile('td/Old.md')); assert(!getFile('td/p1.md'));
 });
 testAsync('3d', async () => {
   resetVault(); const mgr = makeMgr({ settings: { Plugins: [{ id: 'p1', name: 'P1', enabled: true, desc: '', note: '', group: '', tags: [], delay: '' }] }, manifests: { p1: { version: '1.0', author: 'T' } } });
@@ -208,7 +208,7 @@ testAsync('3d', async () => {
   assertEq(callLog.filter(c => c.fn === 'write').length, 0);
 });
 testAsync('3e', async () => {
-  resetVault(); setFile('td/p1.md', '---\nnot_bpm: x\n---\n');
+  resetVault(); setFile('td/P1.md', '---\nnot_bpm: x\n---\n');
   const mgr = makeMgr({ settings: { Plugins: [{ id: 'p1', name: 'P1', enabled: true, desc: '', note: '', group: '', tags: [], delay: '' }] }, manifests: { p1: { version: '1.0' } } });
   const idx = await buildDirIndex(mgr, 'td');
   const r = await exportPluginNote(mgr, idx, mgr.settings.Plugins[0]); assert(r.skipped); assertEq(r.reason, 'target-unowned');
@@ -229,16 +229,16 @@ testAsync('3h', async () => {
   resetVault(); const mgr = makeMgr({ settings: { Plugins: [{ id: 'p1', name: 'P1', enabled: true, desc: '', note: '', group: '', tags: [], delay: '' }] }, manifests: { p1: { version: '1.0' } } });
   const idx = await buildDirIndex(mgr, 'a/b/c'); callLog = [];
   await exportPluginNote(mgr, idx, mgr.settings.Plugins[0]);
-  assert(getFile('a/b/c/p1.md')); assert(callLog.filter(c => c.fn === 'mkdir').length >= 1);
+  assert(getFile('a/b/c/P1.md')); assert(callLog.filter(c => c.fn === 'mkdir').length >= 1);
 });
 testAsync('3i', async () => {
   resetVault(); setFile('td/p1.md', '---\nbpm_ro_id: p1\nmy_c: keep\n---\nuser body\n');
   const mgr = makeMgr({ settings: { Plugins: [{ id: 'p1', name: 'P1', enabled: true, desc: '', note: '', group: '', tags: [], delay: '' }] }, manifests: { p1: { version: '1.0' } } });
   const idx = await buildDirIndex(mgr, 'td'); await exportPluginNote(mgr, idx, mgr.settings.Plugins[0]);
-  const out = getFile('td/p1.md'); assert(out.includes('my_c: keep')); assert(out.includes('user body'));
+  const out = getFile('td/P1.md'); assert(out.includes('my_c: keep')); assert(out.includes('user body'));
 });
 testAsync('3j', async () => {
-  resetVault(); setFile('td/p1.md', '---\nnot_bpm: x\n---\n');
+  resetVault(); setFile('td/P1.md', '---\nnot_bpm: x\n---\n');
   const mgr = makeMgr({ settings: { Plugins: [{ id: 'p1', name: 'P1', enabled: true, desc: '', note: '', group: '', tags: [], delay: '' }] }, manifests: { p1: { version: '1.0' } } });
   const idx = await buildDirIndex(mgr, 'td');
   const r = await exportPluginNote(mgr, idx, mgr.settings.Plugins[0]); assert(r.skipped); assertEq(r.reason, 'target-unowned');
@@ -305,9 +305,9 @@ testAsync('4d self-write', async () => {
   const idx = await buildDirIndex(mgr, 'td');
   await exportPluginNote(mgr, idx, mgr.settings.Plugins[0], { hooks: svc.writeHooks });
   assert(modifyCb !== null);
-  const writtenContent = getFile('td/p1.md'); assert(writtenContent);
+  const writtenContent = getFile('td/P1.md'); assert(writtenContent);
   callLog = [];
-  modifyCb(new TFileMock('td/p1.md'));
+  modifyCb(new TFileMock('td/P1.md'));
   await new Promise(r => setTimeout(r, 800));
   assertEq(callLog.filter(c => c.fn === 'saveSettings').length, 0);
   svc.stop(); mgr.app.vault.on = origOn;
@@ -463,7 +463,7 @@ testAsync('8a exportAll with repo', async () => {
   svc.start('BPM-Export', 'export-only');
   await svc.exportAll();
   assert(resolveCalls >= 1, '8a resolver called');
-  const written = getFile('BPM-Export/memo.md');
+  const written = getFile('BPM-Export/Memo.md');
   assert(!!written, '8b file written');
   const decoded = decodeNote(written);
   assertEq(decoded.frontmatter.bpm_rwc_repo, 'dangehub/obsidian-oh-my-memo', '8c repo in frontmatter');
@@ -480,7 +480,7 @@ testAsync('8b exportAll with resolver throw', async () => {
   const svc = new PluginNotesService(mgr);
   svc.start('BPM-Export', 'export-only');
   await svc.exportAll();
-  const written = getFile('BPM-Export/unknown-p.md');
+  const written = getFile('BPM-Export/Unknown.md');
   assert(!!written, '8d file written despite resolver fail');
   const decoded = decodeNote(written);
   assertEq(decoded.frontmatter.bpm_rwc_repo, '', '8e repo empty when unknown');
