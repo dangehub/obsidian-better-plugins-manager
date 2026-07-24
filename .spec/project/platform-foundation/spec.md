@@ -16,3 +16,4 @@ platform-foundation 管理 BPM 在 Obsidian 宿主环境中的基础能力，涵
 | [[lifecycle]] | 插件启动、自检、迁移、延迟启动、自动接管、卸载清理 |
 | [[settings]] | 设置页面 UI、用户偏好持久化、数据模型定义 |
 | [[localization]] | 多语言翻译系统与语言文件 |
+| [[release-automation]] | 版本一致、tag 规则、CI 构建、正式 Release、assets、中文更新日志与发布后验证 |

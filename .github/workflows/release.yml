@@ -1,35 +1,151 @@
-name: Release Obsidian plugin
+name: Release
 
 on:
   push:
     tags:
       - "*"
+  # Manual trigger as a recovery path. Useful if a tag push fails to fire the
+  # workflow (e.g. when commits and tags are pushed together and GitHub
+  # processes the tag webhook before indexing the workflow file). Only allow
+  # selecting an existing tag from the Actions tab; never run from a branch.
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
 
 jobs:
-  build:
+  release:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
-      - uses: actions/checkout@v3
-
-      - name: Use Node.js
-        uses: actions/setup-node@v3
+      - name: Checkout
+        uses: actions/checkout@v4
         with:
-          node-version: "18.x"
+          # Full history with tags so the release-notes step can find the
+          # previous tag and build a Full Changelog compare link.
+          fetch-depth: 0
 
-      - name: Build plugin
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      # manifest.json is the source of truth for the plugin's version. The
+      # release tag/title always matches what Obsidian's plugin loader sees.
+      # Both tag-push and workflow_dispatch MUST run against a tag ref; running
+      # from a branch is refused with a clear error — we never create a tag
+      # implicitly just to make a release.
+      - name: Read version from manifest and validate ref
+        id: version
         run: |
-          npm install
-          npm run build
+          VERSION=$(jq -r .version manifest.json)
 
-      - name: Create release
+          # Strict SemVer check: must be x.y.z without v prefix
+          if ! echo "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::VERSION '$VERSION' is not a valid SemVer (x.y.z)"
+            exit 1
+          fi
+
+          # Both push-tag and workflow_dispatch must run against a tag ref.
+          # workflow_dispatch from a branch is a common misconfiguration that
+          # would create a release with a branch name as its title; refuse it.
+          if [[ "${{ github.ref_type }}" != "tag" ]]; then
+            echo "::error::This workflow requires a tag ref (github.ref_type=tag)."
+            echo "::error::  Current ref: ${{ github.ref_name }} (type: ${{ github.ref_type }})"
+            echo "::error::If you used workflow_dispatch, select an existing tag from the dropdown."
+            echo "::error::Do not select a branch — the workflow will not create a tag for you."
+            exit 1
+          fi
+
+          # The tag must match the manifest version exactly (no v prefix).
+          TAG="${{ github.ref_name }}"
+          if [[ "$TAG" != "$VERSION" ]]; then
+            echo "::error::Tag '$TAG' does not match manifest version '$VERSION'"
+            exit 1
+          fi
+
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      # BPM requires all three independent assets: main.js, manifest.json,
+      # styles.css. Fail the workflow if any one is missing.
+      - name: Verify and collect release assets
+        id: assets
+        run: |
+          FILES="main.js manifest.json styles.css"
+          MISSING=""
+          for f in $FILES; do
+            if [ ! -f "$f" ]; then
+              echo "::error::Required asset '$f' not found after build"
+              MISSING="$MISSING $f"
+            fi
+          done
+          if [ -n "$MISSING" ]; then
+            exit 1
+          fi
+          echo "list=$FILES" >> "$GITHUB_OUTPUT"
+          {
+            echo "paths<<EOF"
+            for f in $FILES; do echo "$f"; done
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: ${{ steps.assets.outputs.paths }}
+
+      - name: Create or update release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.version.outputs.version }}
+          ASSETS: ${{ steps.assets.outputs.list }}
         run: |
-          tag="${GITHUB_REF#refs/tags/}"
+          # Try reading version-specific release notes
+          NOTES_FILE="release-notes/${VERSION}.md"
+          if [ -f "$NOTES_FILE" ]; then
+            NOTES=$(cat "$NOTES_FILE")
+          else
+            NOTES=""
+          fi
 
-          gh release create "$tag" \
-            --title="$tag" \
-            --draft \
-            main.js manifest.json styles.css
+          # Build Full Changelog compare link
+          PREV_TAG=$(git tag --sort=-creatordate --merged HEAD | grep -v "^${VERSION}$" | head -n 1 || true)
+          if [ -n "$PREV_TAG" ]; then
+            COMPARE_LINK="https://github.com/${GITHUB_REPOSITORY}/compare/${PREV_TAG}...${VERSION}"
+          else
+            COMPARE_LINK="https://github.com/${GITHUB_REPOSITORY}/commits/${VERSION}"
+          fi
+
+          if [ -z "$NOTES" ]; then
+            # Fallback: use latest commit message
+            COMMIT_NOTES=$(git log -1 --pretty=format:%B)
+            NOTES=$(printf "%s\n\n---\n\n**Full Changelog**: %s\n" "$COMMIT_NOTES" "$COMPARE_LINK")
+          else
+            NOTES=$(printf "%s\n\n---\n\n**Full Changelog**: %s\n" "$NOTES" "$COMPARE_LINK")
+          fi
+
+          if gh release view "$VERSION" >/dev/null 2>&1; then
+            echo "Release $VERSION already exists; updating title, notes, assets and status"
+            gh release upload "$VERSION" $ASSETS --clobber
+            gh release edit "$VERSION" \
+              --title="$VERSION" \
+              --notes "$NOTES" \
+              --draft=false \
+              --prerelease=false
+          else
+            gh release create "$VERSION" \
+              --title="$VERSION" \
+              --notes "$NOTES" \
+              $ASSETS
+          fi
