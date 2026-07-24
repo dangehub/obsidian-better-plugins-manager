@@ -83,9 +83,9 @@ export async function buildDirIndex(manager: Manager, dirPath: string): Promise<
 	return { dirPath: normalizedDir, idToFile, conflictedIds, allFiles };
 }
 
-export async function resolveExportPath(manager: Manager, index: ExportDirIndex, pluginId: string): Promise<{ path: string | null; skipped: boolean; reason?: string }> {
+export async function resolveExportPath(manager: Manager, index: ExportDirIndex, pluginId: string, displayName?: string): Promise<{ path: string | null; skipped: boolean; reason?: string }> {
 	const adapter = manager.app.vault.adapter;
-	const desiredPath = normalizePath(`${index.dirPath}/${safeFileName(pluginId, "plugin")}.md`);
+	const desiredPath = normalizePath(`${index.dirPath}/${safeFileName(displayName || pluginId, "plugin")}.md`);
 
 	if (index.conflictedIds.has(pluginId)) {
 		return { path: null, skipped: true, reason: "conflict" };
@@ -163,7 +163,7 @@ export async function exportPluginNote(
 	if (index.conflictedIds.has(mp.id)) return { written: false, skipped: true, reason: "conflict" };
 	if (!(await ensureDirExists(adapter, index.dirPath))) return { written: false, skipped: true, reason: "mkdir-failed" };
 
-	const resolved = await resolveExportPath(manager, index, mp.id);
+	const resolved = await resolveExportPath(manager, index, mp.id, mp.name);
 	if (resolved.skipped || !resolved.path) return { written: false, skipped: true, reason: resolved.reason || "path-unresolved" };
 	const targetPath = resolved.path;
 
