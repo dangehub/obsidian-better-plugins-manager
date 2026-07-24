@@ -1,7 +1,7 @@
 ---
 concern: 审计并设计 BPM Markdown/Bases 导出能力的恢复
 by: unknown
-status: open
+status: landed
 nodes: project, lifecycle, settings, source-install
 created: 2026-07-23T12:51:52.024Z
 ---
